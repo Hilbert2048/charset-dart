@@ -13,8 +13,8 @@ void main(List<String> arguments) {
 
   // advance
   Utf16Encoder encoder = utf16.encoder as Utf16Encoder;
-  print(encoder.encodeUtf16Be("上善若水", false));
-  print(encoder.encodeUtf16Le("上善若水", true));
+  print(Utf16Encoder.encodeUtf16Be("上善若水", false));
+  print(Utf16Encoder.encodeUtf16Le("上善若水", true));
 
   // detect encoding
 

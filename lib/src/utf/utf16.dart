@@ -35,8 +35,13 @@ class Utf16Encoder extends Converter<String, List<int>> {
   @override
   List<int> convert(String input) => bigEndian ? encodeUtf16Be(input, true) : encodeUtf16Le(input, true);
 
+  @override
+  ChunkedConversionSink<String> startChunkedConversion(Sink<List<int>> sink) {
+    return _Utf16EncodingSink(sink, this);
+  }
+
   /// encode utf-16 BE format
-  Uint8List encodeUtf16Be(String str, [bool writeBOM = false]) {
+  static Uint8List encodeUtf16Be(String str, [bool writeBOM = false]) {
     var utf16CodeUnits = codepointsToUtf16CodeUnits(str.codeUnits);
     var encoding = Uint8List(2 * utf16CodeUnits.length + (writeBOM ? 2 : 0));
     var i = 0;
@@ -52,7 +57,7 @@ class Utf16Encoder extends Converter<String, List<int>> {
   }
 
   /// encode utf-16 LE format
-  Uint8List encodeUtf16Le(String str, [bool writeBOM = false]) {
+  static Uint8List encodeUtf16Le(String str, [bool writeBOM = false]) {
     var utf16CodeUnits = codepointsToUtf16CodeUnits(str.codeUnits);
     var encoding = Uint8List(2 * utf16CodeUnits.length + (writeBOM ? 2 : 0));
     var i = 0;
@@ -65,6 +70,25 @@ class Utf16Encoder extends Converter<String, List<int>> {
       encoding[i++] = (unit & unicodeByteOneMask) >> 8;
     }
     return encoding;
+  }
+}
+
+class _Utf16EncodingSink extends ChunkedConversionSink<String> {
+  final Sink<List<int>> sink;
+  final Utf16Encoder encoder;
+
+  _Utf16EncodingSink(this.sink, this.encoder);
+
+  @override
+  void add(String chunk) {
+    sink.add(encoder.bigEndian
+        ? Utf16Encoder.encodeUtf16Be(chunk, true)
+        : Utf16Encoder.encodeUtf16Le(chunk, true));
+  }
+
+  @override
+  void close() {
+    sink.close();
   }
 }
 
@@ -90,6 +114,11 @@ class Utf16Decoder extends Converter<List<int>, String> {
     return bigEndian
         ? decodeUtf16Be(input, start, end, true, replacementCodepoint)
         : decodeUtf16Le(input, start, end, true, replacementCodepoint);
+  }
+
+  @override
+  ChunkedConversionSink<List<int>> startChunkedConversion(Sink<String> sink) {
+    return _Utf16DecodingSink(sink, bigEndian);
   }
 
   /// Produce a String from a sequence of UTF-16BE encoded bytes. This method
@@ -132,6 +161,34 @@ class Utf16Decoder extends Converter<List<int>, String> {
     return String.fromCharCodes(
         utf16CodeUnitsToCodepoints(codeunits, 0, null, replacementCodepoint)
             .whereType<int>());
+  }
+}
+
+class _Utf16DecodingSink extends ChunkedConversionSink<List<int>> {
+  final Sink<String> sink;
+  final bool bigEndian;
+  final List<int> carry = [];
+
+  _Utf16DecodingSink(this.sink, this.bigEndian);
+
+  @override
+  void add(List<int> chunk) {
+    carry.addAll(chunk);
+    while (carry.length >= 2) {
+      final unit = bigEndian
+          ? (carry[0] << 8) + carry[1]
+          : (carry[1] << 8) + carry[0];
+      sink.add(String.fromCharCode(unit));
+      carry.removeRange(0, 2);
+    }
+  }
+
+  @override
+  void close() {
+    if (carry.isNotEmpty) {
+      throw FormatException('Unfinished UTF-16 sequence');
+    }
+    sink.close();
   }
 }
 
