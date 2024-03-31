@@ -167,39 +167,48 @@ class Utf16Decoder extends Converter<List<int>, String> {
 class _Utf16DecodingSink extends ChunkedConversionSink<List<int>> {
   final Sink<String> sink;
   final bool bigEndian;
-  final List<int> carry = [];
+  int leftover = 0;
+  bool hasLeftover = false;
 
   _Utf16DecodingSink(this.sink, this.bigEndian);
 
   @override
   void add(List<int> chunk) {
-    carry.addAll(chunk);
-    // 确保有足够的字节来形成一个完整的UTF-16单元
-    while (carry.length >= 2) {
-      final unit = bigEndian
-          ? (carry[0] << 8) + carry[1]
-          : (carry[1] << 8) + carry[0];
-      sink.add(String.fromCharCode(unit));
-      carry.removeRange(0, 2);
+    int length = chunk.length;
+    StringBuffer buffer = StringBuffer();
+
+    if (hasLeftover) {
+      if (length > 0) {
+        int combined = bigEndian ? (leftover << 8) + chunk[0] : (chunk[0] << 8) + leftover;
+        buffer.writeCharCode(combined);
+        chunk = chunk.sublist(1);
+        hasLeftover = false;
+      }
     }
 
-    // 如果数据块结束时留下一个孤立的字节，保留它以待下一个数据块
-    if (carry.length == 1 && chunk.isNotEmpty) {
-      // 将孤立的字节移动到carry列表的开始处，以便与下一个块结合
-      carry[0] = carry.last;
-      carry.removeLast();
+    for (int i = 0; i < chunk.length - 1; i += 2) {
+      int codeUnit = bigEndian ? (chunk[i] << 8) + chunk[i + 1] : (chunk[i + 1] << 8) + chunk[i];
+      buffer.writeCharCode(codeUnit);
     }
+
+    if (chunk.length % 2 != 0) {
+      leftover = chunk.last;
+      hasLeftover = true;
+    }
+
+    sink.add(buffer.toString());
   }
-
 
   @override
   void close() {
-    if (carry.isNotEmpty) {
-      throw FormatException('Unfinished UTF-16 sequence');
+    if (hasLeftover) {
+      // Handle any leftover bytes by emitting a replacement character.
+      sink.add(String.fromCharCode(unicodeReplacementCharacterCodepoint));
     }
     sink.close();
   }
 }
+
 
 /// instance of utf16 codec
 const Utf16Codec utf16 = Utf16Codec();
