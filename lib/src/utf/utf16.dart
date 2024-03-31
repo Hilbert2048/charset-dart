@@ -174,6 +174,7 @@ class _Utf16DecodingSink extends ChunkedConversionSink<List<int>> {
   @override
   void add(List<int> chunk) {
     carry.addAll(chunk);
+    // 确保有足够的字节来形成一个完整的UTF-16单元
     while (carry.length >= 2) {
       final unit = bigEndian
           ? (carry[0] << 8) + carry[1]
@@ -181,7 +182,15 @@ class _Utf16DecodingSink extends ChunkedConversionSink<List<int>> {
       sink.add(String.fromCharCode(unit));
       carry.removeRange(0, 2);
     }
+
+    // 如果数据块结束时留下一个孤立的字节，保留它以待下一个数据块
+    if (carry.length == 1 && chunk.isNotEmpty) {
+      // 将孤立的字节移动到carry列表的开始处，以便与下一个块结合
+      carry[0] = carry.last;
+      carry.removeLast();
+    }
   }
+
 
   @override
   void close() {
