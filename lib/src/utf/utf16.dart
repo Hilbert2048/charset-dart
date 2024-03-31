@@ -8,14 +8,17 @@ import 'utils.dart';
 
 /// Utf16 Codec
 class Utf16Codec extends Encoding {
+  /// bigEndian
+  final bool bigEndian;
+
   /// Utf16 Codec
-  const Utf16Codec();
+  const Utf16Codec({this.bigEndian = true});
 
   @override
-  Converter<List<int>, String> get decoder => const Utf16Decoder();
+  Converter<List<int>, String> get decoder => bigEndian ? const Utf16Decoder() : const Utf16Decoder(false);
 
   @override
-  Converter<String, List<int>> get encoder => const Utf16Encoder();
+  Converter<String, List<int>> get encoder => bigEndian ? const Utf16Encoder() : const Utf16Encoder(false);
 
   @override
   String get name => 'utf-16';
@@ -23,11 +26,14 @@ class Utf16Codec extends Encoding {
 
 /// Utf16 Encoder
 class Utf16Encoder extends Converter<String, List<int>> {
+  /// bigEndian
+  final bool bigEndian;
+
   /// Utf16 Encoder
-  const Utf16Encoder();
+  const Utf16Encoder([this.bigEndian = true]);
 
   @override
-  List<int> convert(String input) => encodeUtf16Be(input, true);
+  List<int> convert(String input) => bigEndian ? encodeUtf16Be(input, true) : encodeUtf16Le(input, true);
 
   /// encode utf-16 BE format
   Uint8List encodeUtf16Be(String str, [bool writeBOM = false]) {
@@ -64,8 +70,11 @@ class Utf16Encoder extends Converter<String, List<int>> {
 
 /// Utf16Decoder
 class Utf16Decoder extends Converter<List<int>, String> {
+  /// bigEndian
+  final bool bigEndian;
+
   /// Utf16Decoder
-  const Utf16Decoder();
+  const Utf16Decoder([this.bigEndian = true]);
 
   /// Produce a String from a sequence of UTF-16 encoded bytes. This method always
   /// strips a leading BOM. Set the [replacementCodepoint] to null to throw  an
@@ -78,12 +87,9 @@ class Utf16Decoder extends Converter<List<int>, String> {
     int? end,
     int replacementCodepoint = unicodeReplacementCharacterCodepoint,
   ]) {
-    var codeunits = (Utf16BytesToCodeUnitsDecoder(input, start,
-            end == null ? input.length : end - start, replacementCodepoint))
-        .decodeRest();
-    return String.fromCharCodes(
-        utf16CodeUnitsToCodepoints(codeunits, 0, null, replacementCodepoint)
-            .whereType<int>());
+    return bigEndian
+        ? decodeUtf16Be(input, start, end, true, replacementCodepoint)
+        : decodeUtf16Le(input, start, end, true, replacementCodepoint);
   }
 
   /// Produce a String from a sequence of UTF-16BE encoded bytes. This method
